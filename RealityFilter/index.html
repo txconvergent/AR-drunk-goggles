@@ -34,6 +34,7 @@
     <script src="./js/three.ShaderPass.js"></script>
     <script src="./js/three.StereoCamera.js"></script>
     <script src="./js/three.HorizontalBlurShader.js"></script>
+    <script src="./js/three.VerticalBlurShader.js"></script>
     <script src="./js/StereoEffect.js"></script>
     <script src="./js/close-pixelate-canvas.js"></script>
 
@@ -81,7 +82,9 @@
         effectCopy.renderToScreen = true;
         effectBloom = new THREE.BloomPass(1.5);
         hBlur = new THREE.ShaderPass(THREE.HorizontalBlurShader);
-        hBlur.uniforms.h.value = 5 / window.innerHeight;
+        hBlur.uniforms.h.value = 10 / window.innerHeight;
+        vBlur = new THREE.ShaderPass(THREE.VerticalBlurShader);
+        vBlur.uniforms.v.value = 10 / window.innerHeight;
 
         stereoCamera = new THREE.StereoCamera();
         renderPass = new THREE.RenderPass(scene, stereoCamera.left);
@@ -89,6 +92,7 @@
         composer.addPass(renderPass);
         // composer.addPass(effectBloom);
         composer.addPass(hBlur);
+        composer.addPass(vBlur);
         composer.addPass(effectCopy);
 
 
@@ -122,19 +126,19 @@
         if (typeof MediaStreamTrack === 'undefined' && navigator.getUserMedia) {
           alert('This browser doesn\'t support this demo :(');
         } else {
-          // MediaStreamTrack.getSources(function(sources) {
-          //   for (var i = 0; i !== sources.length; ++i) {
-          //     var source = sources[i];
-          //     if (source.kind === 'video') {
-          //       if (source.facing && source.facing == "environment") {
-          //         options.video.optional.push({'sourceId': source.id});
-          //       }
-          //     }
-          //   }
+          navigator.mediaDevices.enumerateDevices().then(function(sources) {
+            for (var i = 0; i !== sources.length; ++i) {
+              var source = sources[i];
+              if (source.kind === 'videoinput') {
+                console.log(source.label);
+                if (source.label.includes("back")) {
+                  options.video.optional.push({'sourceId': source.deviceId});
+                }
+              }
+            }
             
-          //   navigator.getUserMedia(options, streamFound, streamError);
-          // });
-          navigator.getUserMedia(options, streamFound, streamError);
+            navigator.getUserMedia(options, streamFound, streamError);
+          });
         }
 
         function streamFound(stream) {
