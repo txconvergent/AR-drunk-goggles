@@ -38,6 +38,11 @@
     <script src="./js/StereoEffect.js"></script>
     <script src="./js/close-pixelate-canvas.js"></script>
 
+    <script src="./js/dat.gui.min.js"></script>
+    <script src="./js/threex.toxicpprocdatgui.js"></script>
+    <script src="./js/threex.toxicpproc.js"></script>
+    <script src="./js/threex.uniformstween.js"></script>
+
     <script>
       var scene,
           camera, 
@@ -48,8 +53,6 @@
           video,
           canvas,
           context,
-          themes = ['blackandwhite', 'sepia', 'arcade', 'inverse'],
-          currentTheme = 0,
           lookingAtGround = false,
           stereoCamera,
           renderPass,
@@ -58,7 +61,8 @@
           height,
           effectCopy,
           effectBloom,
-          hBlur;
+          hBlur,
+          toxicPasses;
 
       init();
 
@@ -80,19 +84,25 @@
 
         effectCopy = new THREE.ShaderPass(THREE.CopyShader);
         effectCopy.renderToScreen = true;
-        effectBloom = new THREE.BloomPass(1.5);
+        effectBloom = new THREE.BloomPass(0.8);
         hBlur = new THREE.ShaderPass(THREE.HorizontalBlurShader);
-        hBlur.uniforms.h.value = 10 / window.innerHeight;
+        hBlur.uniforms.h.value = 1 / window.innerHeight;
         vBlur = new THREE.ShaderPass(THREE.VerticalBlurShader);
-        vBlur.uniforms.v.value = 10 / window.innerHeight;
+        vBlur.uniforms.v.value = 1 / window.innerHeight;
+
+        toxicPasses = new THREEx.ToxicPproc.Passes();
+        toxicPasses.setPreset('drunk');
+        // THREEx.addToxicPasses2DatGui(toxicPasses);
 
         stereoCamera = new THREE.StereoCamera();
         renderPass = new THREE.RenderPass(scene, stereoCamera.left);
         composer = new THREE.EffectComposer(renderer);
         composer.addPass(renderPass);
-        // composer.addPass(effectBloom);
         composer.addPass(hBlur);
         composer.addPass(vBlur);
+        toxicPasses.addPassesTo(composer);
+        // composer.addPass(effectBloom);
+
         composer.addPass(effectCopy);
 
 
@@ -130,7 +140,6 @@
             for (var i = 0; i !== sources.length; ++i) {
               var source = sources[i];
               if (source.kind === 'videoinput') {
-                console.log(source.label);
                 if (source.label.includes("back")) {
                   options.video.optional.push({'sourceId': source.deviceId});
                 }
@@ -143,7 +152,7 @@
 
         function streamFound(stream) {
           document.body.appendChild(video);
-          video.srcObject = stream; //URL.createObjectURL(stream);
+          video.srcObject = stream;
           video.style.width = '100%';
           video.style.height = '100%';
           video.play();
@@ -181,18 +190,17 @@
           console.log('Stream error: ', error);
         }
 
-        animate();
+        animate(0);
       }
 
+      var lastTimeMSec = null;
 
-      function animate() {
+      function animate(nowMSec) {
         if (context) {
           context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-          if (themes[currentTheme] == 'blackandwhite') {
-            var imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-            context.putImageData(imageData, 0, 0);
-          }
+          var imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+          context.putImageData(imageData, 0, 0);
 
           if (video.readyState === video.HAVE_ENOUGH_DATA) {
             texture.needsUpdate = true;
@@ -201,8 +209,13 @@
 
         requestAnimationFrame(animate);
 
-        update();
-        render();
+
+        lastTimeMSec = lastTimeMSec || nowMSec - 1000/60;
+        var delta = Math.min(200, nowMSec - lastTimeMSec);
+        lastTimeMSec = nowMSec;
+
+        update(delta, nowMSec);
+        render(delta);
       }
 
       function resize() {
@@ -218,22 +231,23 @@
         // effect.setSize(width, height);
       }
 
-      function update(dt) {
+      function update(delta, nowMSec) {
         resize();
 
+        toxicPasses.update(delta / 1000, nowMSec / 1000);
         camera.updateProjectionMatrix();
       }
 
-      function render(dt) {
+      function render(delta) {
         // effect.render(scene, camera);
         stereoCamera.update(scene, camera, width, height);
         renderer.setViewport(0, 0, width / 2, height);
         renderPass.camera = stereoCamera.left;
-        composer.render();
+        composer.render(delta);
 
         renderer.setViewport(window.innerWidth / 2, 0, width / 2, height);
         renderPass.camera = stereoCamera.right;
-        composer.render();
+        composer.render(delta);
       }
 
       function fullscreen() {
